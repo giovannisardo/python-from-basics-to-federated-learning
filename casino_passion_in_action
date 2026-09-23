@@ -1,0 +1,504 @@
+# Casinò Giovanni & Fabio
+#Hub 5 giochi: Blackjack, Sette e Mezzo, Slot, Sfida Dadi, Poker Messicano + bankroll plot. 
+#Run in Colab/Jupyter: `terminale_casino()`. Start 100 fiches, grafico andamento salvato in png.
+import random
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+from IPython.display import clear_output, display
+
+# __________________________________________
+# Classi e funzioni condivise
+# __________________________________________
+class Carta:
+    def __init__(self, seme, rango):
+        self.seme = seme
+        self.rango = rango
+    def __str__(self):
+        return f"{self.rango} di {self.seme}"
+
+class Fiches:
+    def __init__(self, totale=100):
+        self.totale = totale
+        self.puntata = 0
+    def vince_puntata(self):
+        self.totale += self.puntata
+    def perde_puntata(self):
+        self.totale -= self.puntata
+
+def fai_puntata(fiches):
+    while True:
+        try:
+            fiches.puntata = int(input(f"Hai {fiches.totale} fiches. Quanto vuoi puntare? "))
+        except ValueError:
+            print("Inserisci un numero intero!")
+        else:
+            if fiches.puntata > fiches.totale:
+                print(f"Non hai abbastanza fiches! Ne hai: {fiches.totale}")
+            elif fiches.puntata <= 0:
+                print("Devi puntare qualcosa!")
+            else:
+                break
+
+# __________________________________________
+# Blackjack
+# __________________________________________
+SEMI_BJ = ('Cuori', 'Quadri', 'Picche', 'Fiori')
+RANGHI_BJ = ('Due', 'Tre', 'Quattro', 'Cinque', 'Sei', 'Sette', 'Otto', 'Nove', 'Dieci', 'Jack', 'Regina', 'Re', 'Asso')
+VALORI_BJ = {'Due':2, 'Tre':3, 'Quattro':4, 'Cinque':5, 'Sei':6, 'Sette':7, 'Otto':8, 'Nove':9, 'Dieci':10, 'Jack':10, 'Regina':10, 'Re':10, 'Asso':11}
+
+class Mazzo:
+    def __init__(self):
+        self.mazzo = [Carta(s, r) for s in SEMI_BJ for r in RANGHI_BJ]
+    def mescola(self):
+        random.shuffle(self.mazzo)
+    def distribuisci(self):
+        return self.mazzo.pop()
+
+class Mano:
+    def __init__(self):
+        self.carte = []
+        self.valore = 0
+        self.assi = 0
+    def aggiungi_carta(self, carta):
+        self.carte.append(carta)
+        self.valore += VALORI_BJ[carta.rango]
+        if carta.rango == 'Asso': self.assi += 1
+    def regola_per_asso(self):
+        while self.valore > 21 and self.assi:
+            self.valore -= 10
+            self.assi -= 1
+
+def gioca_blackjack(fiches, storia):
+    clear_output(wait=True)
+    print("-- EL TAVOLO DEL BLACKJACK :) --")
+    mazzo = Mazzo()
+    mazzo.mescola()
+
+    mano_gioc = Mano()
+    mano_banco = Mano()
+    for _ in range(2):
+        mano_gioc.aggiungi_carta(mazzo.distribuisci())
+        mano_banco.aggiungi_carta(mazzo.distribuisci())
+
+    mano_gioc.regola_per_asso()
+    mano_banco.regola_per_asso()
+
+    fai_puntata(fiches)
+
+    # Turno Giocatore
+    while True:
+        print(f"\nCarte Banco: <coperta> e {mano_banco.carte[1]}")
+        print("Tue carte, coprile:")
+        for c in mano_gioc.carte: print(f" - {c}")
+        print(f"Valore: {mano_gioc.valore}")
+
+        if mano_gioc.valore > 21:
+            print("HAI SBALLATO, GODO!")
+            fiches.perde_puntata()
+            storia.append(fiches.totale)
+            time.sleep(3)
+            return
+
+        scelta = input("Vuoi carta (h) o c'hai paura? Stai con (s)? ").lower()
+        if scelta == 'h':
+            mano_gioc.aggiungi_carta(mazzo.distribuisci())
+            mano_gioc.regola_per_asso()
+        elif scelta == 's':
+            break
+
+    # Turno Banco
+    print("\nTurno del Banco...")
+    while mano_banco.valore < 17:
+        mano_banco.aggiungi_carta(mazzo.distribuisci())
+        mano_banco.regola_per_asso()
+
+    print("\nCarte Banco definitive:")
+    for c in mano_banco.carte: print(f" - {c}")
+    print(f"Valore Banco: {mano_banco.valore}")
+
+    if mano_banco.valore > 21:
+        print("IL BANCO SBALLA! HAI AVUTO FORTUNA!!!!! (Per una volta)")
+        fiches.vince_puntata()
+    elif mano_banco.valore >= mano_gioc.valore:
+        print("IL BANCO VINCE! AH")
+        fiches.perde_puntata()
+    elif mano_banco.valore < mano_gioc.valore:
+        print("VINCI!")
+        fiches.vince_puntata()
+
+    storia.append(fiches.totale)
+    time.sleep(7)
+
+# __________________________________________
+# 7 1/2
+# __________________________________________
+SEMI_ITA = ('Coppe', 'Denari', 'Bastoni', 'Spade')
+RANGHI_ITA = ('Asso', 'Due', 'Tre', 'Quattro', 'Cinque', 'Sei', 'Sette', 'Fante', 'Cavallo', 'Re')
+VALORI_ITA = {'Asso':1, 'Due':2, 'Tre':3, 'Quattro':4, 'Cinque':5, 'Sei':6, 'Sette':7, 'Fante':0.5, 'Cavallo':0.5, 'Re':0.5}
+
+class MazzoSetteMezzo:
+    def __init__(self):
+        self.mazzo = [Carta(s, r) for s in SEMI_ITA for r in RANGHI_ITA]
+    def mescola(self):
+        random.shuffle(self.mazzo)
+    def distribuisci(self):
+        return self.mazzo.pop()
+
+class ManoSetteMezzo:
+    def __init__(self):
+        self.carte = []
+        self.valore = 0.0
+    def aggiungi_carta(self, carta):
+        self.carte.append(carta)
+        self.valore += VALORI_ITA[carta.rango]
+
+def gioca_sette_mezzo(fiches, storia):
+    clear_output(wait=True)
+    print("-- TAVOLO DI SETTE E MEZZO--")
+    mazzo = MazzoSetteMezzo()
+    mazzo.mescola()
+
+    mano_gioc = ManoSetteMezzo()
+    mano_banco = ManoSetteMezzo()
+    fai_puntata(fiches)
+
+    mano_gioc.aggiungi_carta(mazzo.distribuisci())
+    mano_banco.aggiungi_carta(mazzo.distribuisci())
+
+    while True:
+        print("\nLe tue carte:")
+        for c in mano_gioc.carte: print(f" - {c}")
+        print(f"Valore totale: {mano_gioc.valore}")
+
+        if mano_gioc.valore > 7.5:
+            print("HAI SBALLATO!")
+            fiches.perde_puntata()
+            storia.append(fiches.totale)
+            time.sleep(3)
+            return
+
+        scelta = input("Vuoi un'altra carta? (s/n): ").lower()
+        if scelta == 's':
+            mano_gioc.aggiungi_carta(mazzo.distribuisci())
+        else:
+            break
+
+    # Turno Banco
+    print("\nTurno del Banco...")
+    while mano_banco.valore < 5.0:
+        mano_banco.aggiungi_carta(mazzo.distribuisci())
+
+    print(f"Valore finale Banco: {mano_banco.valore}")
+
+    if mano_banco.valore > 7.5 or mano_gioc.valore > mano_banco.valore:
+        print("HAI VINTO!")
+        fiches.vince_puntata()
+    elif mano_banco.valore >= mano_gioc.valore:
+        print("IL BANCO VINCE!")
+        fiches.perde_puntata()
+
+    storia.append(fiches.totale)
+    time.sleep(7)
+
+# __________________________________________
+# Slot machine
+# __________________________________________
+def gioca_slot(fiches, storia):
+    clear_output(wait=True)
+    print("-- SLOT MACHINE --")
+    print("Pronto a tirare??????????????")
+    costo = 6.7
+    if fiches.totale < costo:
+        print("Non hai abbastanza fiches (costo: 6.7).")
+        time.sleep(2)
+        return
+
+    input("Premi Invio per tirare la leva (Costo: 6.7 fiches)...")
+    fiches.totale -= costo
+
+    simboli = ['🍒', '🍋', '🔔', '💎', '🍉']
+    rulli = [random.choice(simboli) for _ in range(3)]
+    print(f"\n[ {rulli[0]} | {rulli[1]} | {rulli[2]} ]\n")
+
+    if rulli[0] == rulli[1] == rulli[2]:
+        vincita = 100 if rulli[0] == '💎' else 25
+        print(f"JACKPOT!!! Hai vinto {vincita} fiches!")
+        fiches.totale += vincita
+    else:
+        print("Ritenta, sarai più fortunato...")
+
+    storia.append(fiches.totale)
+    time.sleep(1)
+
+# __________________________________________
+# Sfida Secca dei Dadi
+# __________________________________________
+FACCE_DADO = {1:'⚀', 2:'⚁', 3:'⚂', 4:'⚃', 5:'⚄', 6:'⚅'}
+
+def lancia_dado():
+    return random.randint(1, 6)
+
+def animazione_dado():
+    for _ in range(3):
+        print("🎲 ...", end='\r')
+        time.sleep(0.3)
+        print("🎲    ", end='\r')
+        time.sleep(0.2)
+
+def gioca_sfida_dadi(fiches, storia):
+    clear_output(wait=True)
+    print("=" * 40)
+    print("      🎲  SFIDA SECCA DEI DADI  🎲")
+    print("=" * 40)
+    print("Regole: tu e il bancone lanciate un dado.")
+    print("Chi fa il numero più alto vince la puntata.")
+    print("In caso di parità si rilancia finché qualcuno vince.")
+    print("-" * 40)
+    fai_puntata(fiches)
+    round_n = 1
+    while True:
+        if round_n > 1:
+            print(f"\n[Rilancio #{round_n} - pareggio precedente]")
+        else:
+            print()
+        input("Premi Invio per lanciare il dado...")
+        animazione_dado()
+        dado_gioc = lancia_dado()
+        dado_banco = lancia_dado()
+        print(f"\nTuo dado:    {FACCE_DADO[dado_gioc]}  ({dado_gioc})")
+        print(f"Dado Banco:  {FACCE_DADO[dado_banco]}  ({dado_banco})")
+        time.sleep(0.5)
+        if dado_gioc > dado_banco:
+            print(f"\n🏆 HAI VINTO! {dado_gioc} batte {dado_banco}!")
+            fiches.vince_puntata()
+            break
+        elif dado_banco > dado_gioc:
+            print(f"\n💀 IL BANCO VINCE! {dado_banco} batte {dado_gioc}. Meglio la prossima volta.")
+            fiches.perde_puntata()
+            break
+        else:
+            print(f"\n🤝 PAREGGIO! ({dado_gioc} = {dado_banco}) Si rilancia...")
+            time.sleep(1)
+            round_n += 1
+    storia.append(fiches.totale)
+    time.sleep(4)
+
+# __________________________________________
+# Poker Messicano (Mentiroso)
+# __________________________________________
+FACCE_DADO_MINI = {1:'①', 2:'②', 3:'③', 4:'④', 5:'⑤', 6:'⑥'}
+
+def conta_dadi(dadi, valore_min):
+    return sum(1 for d in dadi if d >= valore_min)
+
+def dichiarazione_banco(dadi_banco, ultima_dichiarazione):
+    prev_q, prev_v = ultima_dichiarazione if ultima_dichiarazione else (0, 1)
+    dichiarazioni_valide = [
+        (q, v) for v in range(1, 7) for q in range(1, 6)
+        if (q > prev_q) or (q == prev_q and v > prev_v)
+    ]
+    if not dichiarazioni_valide:
+        return (5, 6)
+    dichiarazioni_oneste = [
+        (q, v) for (q, v) in dichiarazioni_valide
+        if conta_dadi(dadi_banco, v) >= q
+    ]
+    if random.random() < 0.40 or not dichiarazioni_oneste:
+        return random.choice(dichiarazioni_valide)
+    else:
+        dichiarazioni_oneste.sort(key=lambda x: (x[0], x[1]))
+        idx = random.randint(0, max(0, len(dichiarazioni_oneste) // 2))
+        return dichiarazioni_oneste[idx]
+
+def stampa_dadi(dadi, nascosti=False):
+    if nascosti:
+        return "[ " + " | ".join("🎲" for _ in dadi) + " ]"
+    return "[ " + " | ".join(f"{FACCE_DADO_MINI[d]}({d})" for d in dadi) + " ]"
+
+def gioca_poker_messicano(fiches, storia):
+    clear_output(wait=True)
+    print("=" * 40)
+    print("  🇲🇽  POKER MESSICANO (Mentiroso)  🇲🇽")
+    print("=" * 40)
+    print("Regole: entrambi lanciano 5 dadi segreti.")
+    print("Il banco dichiara quanti dadi ha con valore ≥ X.")
+    print("[C]redi → devi dichiarare qualcosa di più alto.")
+    print("[B]ugiardo → si scoprono i dadi del banco.")
+    print("3 vite ciascuno. Chi le perde tutte, perde!")
+    print("-" * 40)
+    input("Premi Invio per iniziare...")
+    fai_puntata(fiches)
+
+    vite_gioc = vite_banco = 3
+
+    while vite_gioc > 0 and vite_banco > 0:
+        clear_output(wait=True)
+        print(f"❤️  Tue vite: {vite_gioc}  |  🏦 Vite banco: {vite_banco}")
+        print("-" * 40)
+
+        dadi_gioc  = [lancia_dado() for _ in range(5)]
+        dadi_banco = [lancia_dado() for _ in range(5)]
+        print(f"I tuoi dadi: {stampa_dadi(dadi_gioc)}")
+
+        dichiarazione = None
+        turno = "banco"
+
+        while True:
+            # ── Turno banco ──────────────────────────────
+            if turno == "banco":
+                q, v = dichiarazione_banco(dadi_banco, dichiarazione)
+                dichiarazione = (q, v)
+                print(f"\n🏦 Banco dichiara: almeno {q} dado/i ≥ {v}")
+
+                scelta = ""
+                while scelta not in ("C", "B"):
+                    scelta = input("[C]redi / [B]ugiardo? ").strip().upper()
+
+                if scelta == "B":
+                    print(f"\n🔍 Dadi banco: {stampa_dadi(dadi_banco)}")
+                    reali = conta_dadi(dadi_banco, v)
+                    if reali >= q:
+                        print("❌ Era onesto! Perdi una vita.")
+                        vite_gioc -= 1
+                    else:
+                        print("✅ Bluffava! Banco perde una vita.")
+                        vite_banco -= 1
+                    time.sleep(2)
+                    break
+
+                turno = "giocatore"
+
+            # ── Turno giocatore ───────────────────────────
+            else:
+                prev_q, prev_v = dichiarazione
+                print(f"\nI tuoi dadi: {stampa_dadi(dadi_gioc)}")
+                print(f"Devi dichiarare più di ({prev_q} dadi ≥ {prev_v})")
+
+                while True:
+                    try:
+                        q = int(input("  Quanti dadi? (1-5): "))
+                        v = int(input("  Valore minimo? (1-6): "))
+                        if 1 <= q <= 5 and 1 <= v <= 6 and (q > prev_q or (q == prev_q and v > prev_v)):
+                            break
+                        print("  ⚠️  Dichiarazione non valida o non più alta!")
+                    except ValueError:
+                        print("  Inserisci un numero!")
+
+                dichiarazione = (q, v)
+                print(f"\n👤 Dichiari: almeno {q} dado/i ≥ {v}")
+
+                attesi = 10 * (7 - v) / 6
+                if q > attesi * 1.5 or random.random() < 0.25:
+                    print("🏦 Banco chiama BUGIARDO!")
+                    print(f"   Tuoi dadi: {stampa_dadi(dadi_gioc)}")
+                    if conta_dadi(dadi_gioc, v) >= q:
+                        print("✅ Eri onesto! Banco perde una vita.")
+                        vite_banco -= 1
+                    else:
+                        print("❌ Bluffavi! Perdi una vita.")
+                        vite_gioc -= 1
+                    time.sleep(2)
+                    break
+                else:
+                    print("🏦 Banco crede.")
+                    turno = "banco"
+
+        input("\nPremi Invio per il prossimo round...")
+
+    # ── Risultato finale ──────────────────────────────────
+    clear_output(wait=True)
+    print(f"\nVite finali → Tu: {vite_gioc} | Banco: {vite_banco}")
+    if vite_gioc > vite_banco:
+        print("🏆 HAI VINTO IL POKER MESSICANO!")
+        fiches.vince_puntata()
+    elif vite_banco > vite_gioc:
+        print("💀 IL BANCO VINCE!")
+        fiches.perde_puntata()
+    else:
+        print("🤝 PAREGGIO!")
+
+    storia.append(fiches.totale)
+    time.sleep(4)
+
+# __________________________________________
+# Analisi dati
+# __________________________________________
+def analizza_partita(storia):
+    clear_output(wait=True)
+    if len(storia) <= 1:
+        print("Devi giocare almeno una mano prima di vedere il grafico!")
+        return
+    y = np.array(storia)
+    x = np.arange(len(y))
+    plt.style.use('ggplot')
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(x, y, marker='o', color='royalblue', linestyle='-', linewidth=2, label="Bankroll")
+    ax.axhline(y=storia[0], color='red', linestyle='--', label=f"Capitale iniziale ({storia[0]} fiches)")
+    ax.fill_between(x, storia[0], y, where=(y >= storia[0]), alpha=0.15, color='green', label='Profitto')
+    ax.fill_between(x, storia[0], y, where=(y < storia[0]),  alpha=0.15, color='red',   label='Perdita')
+    ax.set_title('📈 Andamento Fiches nel Casinò', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Numero di Azioni / Mani Giocate')
+    ax.set_ylabel('Totale Fiches')
+    ax.set_xticks(x)
+    ax.legend()
+    ax.grid(True)
+    fig.tight_layout()
+    fig.savefig('andamento_fiches.png', dpi=120)
+    display(fig)
+    plt.close(fig)
+    print(f"\n📊 Statistiche — Picco massimo: {np.max(y):.1f} | Minimo: {np.min(y):.1f} | Attuale: {y[-1]:.1f} fiches")
+    print("💾 Grafico salvato come 'andamento_fiches.png'")
+
+# __________________________________________
+# HUB PRINCIPALE
+# __________________________________________
+def terminale_casino():
+    portafoglio = Fiches(100)
+    storia_totale = [portafoglio.totale]
+    while True:
+        clear_output(wait=True)
+        print("=" * 40)
+        print("   BENVENUTI AL CASINÒ DI GIOVANNI & FABIO   ")
+        print("=" * 40)
+        print(f"💰 Fiches attuali: {portafoglio.totale}")
+        print("-" * 40)
+        print("Scegli un gioco dal menu:")
+        print(" 1 - 🃏 Blackjack")
+        print(" 2 - 🇮🇹 Sette e Mezzo")
+        print(" 3 - 🎰 Slot Machine (Gioco Rapido)")
+        print(" 4 - 🎲 Sfida Secca dei Dadi (vs Bancone)")
+        print(" 5 - 🇲🇽 Poker Messicano (Mentiroso) — Bluff con i dadi!")
+        print(" 6 - 📈 Mostra Grafico Andamento Fiches")
+        print(" 0 - 🚪 Esci dal Casinò")
+        print("-" * 40)
+
+        scelta = input("Digita il numero della tua scelta: ")
+
+        if scelta == '1':
+            gioca_blackjack(portafoglio, storia_totale)
+        elif scelta == '2':
+            gioca_sette_mezzo(portafoglio, storia_totale)
+        elif scelta == '3':
+            gioca_slot(portafoglio, storia_totale)
+        elif scelta == '4':
+            gioca_sfida_dadi(portafoglio, storia_totale)
+        elif scelta == '5':
+            gioca_poker_messicano(portafoglio, storia_totale)
+        elif scelta == '6':
+            analizza_partita(storia_totale)
+            input("\nPremi Invio per tornare al menu...")
+        elif scelta == '0':
+            clear_output(wait=True)
+            print("\nGrazie per aver giocato! Alla prossima.")
+            break
+        else:
+            print("\nScelta non valida! Riprova.")
+            time.sleep(1)
+
+        if portafoglio.totale <= 1:
+            clear_output(wait=True)
+            print("Hai finito le fiches! Ti abbiamo buttato fuori dal Casinò.")
+            break
+
+terminale_casino()
